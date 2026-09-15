@@ -1,37 +1,70 @@
-# Jackal Dash
+# The Jackal's Den
 
-A tiny, dependency-free browser game — plain HTML/CSS/JS, no build step, no backend, no database. Made as a demo for "static site with basics of GitHub Actions."
-
-Play: press <kbd>Space</kbd> / <kbd>↑</kbd> or tap the canvas to jump the jackal over rocks. Speed ramps up over time; your best score is kept in the browser's `localStorage` (client-side only — that's why no database is needed).
+A small Jekyll blog — no database, no server to manage. Content is Markdown files
+in `_posts/`, built into static HTML by Jekyll, and deployed automatically to
+GitHub Pages by a GitHub Actions workflow on every push to `main`.
 
 ## Run it locally
 
-No build tools required — just open the file, or serve it:
-
 ```bash
-python3 -m http.server 8000
+bundle install
+bundle exec jekyll serve
 ```
 
-Then visit `http://localhost:8000`.
+Then visit `http://localhost:4000`.
 
-## How the GitHub Actions setup works
+## Structure
 
-Two workflows live in [.github/workflows](.github/workflows):
+- [`_config.yml`](_config.yml) — site title, theme (`minima`), plugins.
+- [`_posts/`](_posts) — blog posts, one Markdown file per post, named `YYYY-MM-DD-title.md`.
+- [`index.md`](index.md) — home page (uses the theme's `home` layout, which lists posts).
+- [`about.md`](about.md) — a static page, reachable at `/about/`.
+- [`Gemfile`](Gemfile) — pins `jekyll`, the `minima` theme, and the plugins used.
 
-- **[ci.yml](.github/workflows/ci.yml)** — runs on every push and pull request to `main`. It checks out the repo and does a couple of cheap sanity checks (required files exist, `index.html` has a `<title>`). This is the "basics" workflow: triggers (`on:`), a job, steps, `runs-on`.
-- **[deploy.yml](.github/workflows/deploy.yml)** — runs after `CI` finishes successfully on `main` (via `workflow_run`), or manually via `workflow_dispatch`. It packages the repository as a Pages artifact and deploys it using GitHub's official Pages actions (`configure-pages`, `upload-pages-artifact`, `deploy-pages`).
+## How the GitHub Actions deploy works
+
+[`.github/workflows/jekyll.yml`](.github/workflows/jekyll.yml) has two jobs:
+
+1. **build** — checks out the repo, sets up Ruby via `ruby/setup-ruby` (with
+   Bundler caching), runs `actions/jekyll-build-pages` to generate `_site/`, and
+   uploads that folder as a Pages artifact via `actions/upload-pages-artifact`.
+2. **deploy** — gated with `needs: build`, publishes the artifact using
+   `actions/deploy-pages`.
 
 ### One-time repo setup on GitHub
 
 1. Push this repo to GitHub.
-2. In the repo, go to **Settings → Pages** and set **Source** to **GitHub Actions**.
-3. Push to `main` (or run the `Deploy to GitHub Pages` workflow manually from the **Actions** tab). Once it finishes, the deployment URL shows up in the workflow run summary and under **Settings → Pages**.
+2. **Settings → Pages → Source: GitHub Actions.**
+3. Push to `main` (or run the workflow manually via **Actions → Run workflow** —
+   it supports `workflow_dispatch`). The deployed URL appears in the run summary
+   and under Settings → Pages.
+
+## Adding a new post
+
+Create `_posts/YYYY-MM-DD-your-title.md` with front matter:
+
+```markdown
+---
+layout: post
+title: "Your Title"
+date: YYYY-MM-DD HH:MM:SS +0000
+categories: some-category
+---
+
+Your content here.
+```
+
+Push it — the workflow rebuilds and redeploys the whole site automatically.
 
 ## Presentation talking points
 
-- **No database, no server** — the whole app is static files; GitHub Pages just serves them.
-- **`on:`** — what triggers a workflow (`push`, `pull_request`, `workflow_run`, `workflow_dispatch`).
-- **`jobs` / `steps`** — a job runs on a fresh VM (`runs-on: ubuntu-latest`); steps run in order, each either a shell command (`run:`) or a reusable action (`uses:`).
-- **Marketplace actions** — `actions/checkout`, `actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages` are official, versioned building blocks instead of hand-rolled scripts.
-- **Permissions & environments** — `deploy.yml` requests only the scopes it needs (`pages: write`, `id-token: write`) and deploys into the `github-pages` environment.
-- **Separating CI from deploy** — validation runs on every push/PR; deployment only runs after CI passes on `main`, which is a common real-world pattern.
+- **Static site generator vs. hand-written HTML** — Jekyll turns Markdown +
+  layouts into HTML at build time; you write content, not markup.
+- **Two-job workflow** — `build` and `deploy` as separate jobs connected by
+  `needs:`, a common pattern for gating a risky step (deploying) behind a
+  cheaper one (building) that can also run on pull requests for validation.
+- **`ruby/setup-ruby` with `bundler-cache: true`** — caches installed gems
+  between runs so CI doesn't reinstall the same dependencies every time.
+- **Same Pages deploy actions as any static site** — `configure-pages`,
+  `upload-pages-artifact`, `deploy-pages` don't care whether the artifact came
+  from Jekyll, a plain `cp`, or any other generator.

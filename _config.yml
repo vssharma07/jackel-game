@@ -1,0 +1,22 @@
+title: The Jackal's Den
+description: >-
+  A small Jekyll blog about static sites, GitHub Actions, and the
+  occasional jackal fact — built to demo deploying Jekyll to GitHub Pages.
+author: Jackal's Den
+
+theme: minima
+minima:
+  skin: dark
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+markdown: kramdown
+permalink: /:year/:month/:day/:title/
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor
