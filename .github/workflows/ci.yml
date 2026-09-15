@@ -1,0 +1,34 @@
+name: CI
+
+# "Basics of GitHub Actions" demo #1: a workflow triggered on push/PR
+# that validates the static site before it's allowed to be deployed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required files exist
+        run: |
+          for f in index.html style.css game.js; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Missing required file: $f"
+              exit 1
+            fi
+            echo "Found $f"
+          done
+
+      - name: Basic HTML sanity check
+        run: |
+          if ! grep -q "<title>" index.html; then
+            echo "::error::index.html is missing a <title> tag"
+            exit 1
+          fi
+          echo "index.html looks OK"

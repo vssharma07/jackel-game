@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jackal Dash</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>🐺 Jackal Dash</h1>
+    <p class="subtitle">Jump the rocks. Outrun the desert. No servers, no database — just static files.</p>
+
+    <div class="game-frame">
+      <canvas id="game" width="800" height="300"></canvas>
+
+      <div id="overlay" class="overlay">
+        <div class="panel">
+          <h2 id="overlay-title">Jackal Dash</h2>
+          <p id="overlay-text">Press <kbd>Space</kbd> / tap to jump over rocks. Survive as long as you can.</p>
+          <button id="start-btn">Start Game</button>
+        </div>
+      </div>
+
+      <div class="hud">
+        <span>Score: <strong id="score">0</strong></span>
+        <span>Best: <strong id="high-score">0</strong></span>
+      </div>
+    </div>
+
+    <p class="hint">Controls: <kbd>Space</kbd> / <kbd>↑</kbd> / tap or click the canvas to jump.</p>
+
+    <footer>
+      Built as a static site — deployed automatically via GitHub Actions to GitHub Pages.
+    </footer>
+  </main>
+
+  <script src="game.js"></script>
+</body>
+</html>
