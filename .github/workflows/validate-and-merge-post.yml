@@ -1,0 +1,93 @@
+name: Validate and merge post
+
+# Runs on every PR that touches _posts/ (in practice, only PRs opened
+# by add-post.yml). Rejects anything that isn't purely a new post
+# file, makes sure the site still builds, does a basic content-safety
+# scan, then merges and kicks off the deploy workflow itself — since
+# a merge performed by GITHUB_TOKEN does not trigger jekyll.yml's own
+# `on: push` automatically.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "_posts/**"
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+
+      - name: Restrict changes to new files under _posts/
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          changed=$(git diff --name-status "$BASE"...HEAD)
+          echo "$changed"
+          if [ -z "$changed" ]; then
+            echo "::error::No changes detected"
+            exit 1
+          fi
+          if echo "$changed" | grep -vE '^A[[:space:]]_posts/[^/]+\.md$'; then
+            echo "::error::PR must only add new files under _posts/ — no edits, deletes, or changes elsewhere"
+            exit 1
+          fi
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Validate front matter
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          files=$(git diff --name-only "$BASE"...HEAD -- '_posts/*.md')
+          for f in $files; do
+            ruby -ryaml -e '
+              text = File.read(ARGV[0])
+              parts = text.split(/^---\s*$/, 3)
+              abort "Missing front matter in #{ARGV[0]}" if parts.length < 3
+              fm = YAML.safe_load(parts[1], permitted_classes: [Time, Date])
+              abort "Front matter is not a mapping in #{ARGV[0]}" unless fm.is_a?(Hash)
+              %w[layout title date].each do |key|
+                abort "Missing #{key} in front matter of #{ARGV[0]}" unless fm.key?(key)
+              end
+              abort "layout must be post in #{ARGV[0]}" unless fm["layout"] == "post"
+            ' "$f"
+          done
+
+      - name: Scan for raw HTML / script content
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          files=$(git diff --name-only "$BASE"...HEAD -- '_posts/*.md')
+          for f in $files; do
+            if grep -iE '<script|<iframe|javascript:|on[a-z]+ *=' "$f"; then
+              echo "::error::Disallowed HTML/script content in $f"
+              exit 1
+            fi
+          done
+
+      - name: Build site
+        run: bundle exec jekyll build
+
+      - name: Merge pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge "${{ github.event.pull_request.number }}" --squash --delete-branch
+
+      - name: Trigger deploy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run jekyll.yml --ref ${{ github.event.pull_request.base.ref }}

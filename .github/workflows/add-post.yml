@@ -1,0 +1,87 @@
+name: Add Post
+
+# Manually run from the Actions tab to add a new blog post without
+# touching git locally. Fill in the inputs below and "Run workflow" —
+# this generates the post file and opens a PR. That PR is then
+# checked and auto-merged by validate-and-merge-post.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Post title"
+        required: true
+        type: string
+      categories:
+        description: "Category (optional, single word)"
+        required: false
+        type: string
+      content:
+        description: "Post body, in Markdown"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-post-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate post file
+        env:
+          TITLE: ${{ inputs.title }}
+          CATEGORIES: ${{ inputs.categories }}
+          CONTENT: ${{ inputs.content }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, datetime
+
+          title = os.environ["TITLE"].strip()
+          categories = os.environ.get("CATEGORIES", "").strip()
+          content = os.environ["CONTENT"].strip()
+
+          if not title:
+              raise SystemExit("Title is required")
+          if not content:
+              raise SystemExit("Content is required")
+
+          slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "post"
+          now = datetime.datetime.now(datetime.timezone.utc)
+          date_str = now.strftime("%Y-%m-%d")
+          timestamp = now.strftime("%Y-%m-%d %H:%M:%S +0000")
+
+          lines = ["---", "layout: post", f"title: {json.dumps(title)}", f"date: {timestamp}"]
+          if categories:
+              lines.append(f"categories: {json.dumps(categories)}")
+          lines.append("---")
+
+          post = "\n".join(lines) + "\n\n" + content + "\n"
+
+          pathlib.Path("_posts").mkdir(exist_ok=True)
+          path = pathlib.Path(f"_posts/{date_str}-{slug}.md")
+          path.write_text(post)
+          print(f"Wrote {path}")
+
+          delim = "POST_TITLE_EOF"
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"POST_SLUG={slug}\n")
+              f.write(f"POST_TITLE<<{delim}\n{title}\n{delim}\n")
+          PY
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          commit-message: "Add post: ${{ env.POST_TITLE }}"
+          title: "Add post: ${{ env.POST_TITLE }}"
+          body: |
+            Opened automatically by the **Add Post** workflow.
+
+            This will be validated and merged automatically by
+            `validate-and-merge-post.yml` if all checks pass.
+          branch: add-post/${{ env.POST_SLUG }}-${{ github.run_number }}
+          delete-branch: true
+          add-paths: _posts/*
