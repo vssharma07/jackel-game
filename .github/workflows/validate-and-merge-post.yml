@@ -55,7 +55,7 @@ jobs:
           BASE="origin/${{ github.event.pull_request.base.ref }}"
           files=$(git diff --name-only "$BASE"...HEAD -- '_posts/*.md')
           for f in $files; do
-            ruby -ryaml -e '
+            ruby -ryaml -rdate -e '
               text = File.read(ARGV[0])
               parts = text.split(/^---\s*$/, 3)
               abort "Missing front matter in #{ARGV[0]}" if parts.length < 3
