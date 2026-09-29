@@ -16,7 +16,7 @@ on:
         required: false
         type: string
       content:
-        description: "Post body, in Markdown"
+        description: "Raw URL to the post body Markdown (e.g. a Gist 'Raw' link) — not the content itself"
         required: true
         type: string
 
@@ -31,18 +31,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Fetch post content
+        env:
+          CONTENT_URL: ${{ inputs.content }}
+        run: |
+          case "$CONTENT_URL" in
+            https://gist.githubusercontent.com/*|https://raw.githubusercontent.com/*)
+              ;;
+            *)
+              echo "::error::content must be a raw URL from gist.githubusercontent.com or raw.githubusercontent.com (got: $CONTENT_URL)"
+              exit 1
+              ;;
+          esac
+          curl -fsSL "$CONTENT_URL" -o post_body.md
+          if [ ! -s post_body.md ]; then
+            echo "::error::Fetched content is empty"
+            exit 1
+          fi
+          echo "Fetched $(wc -l < post_body.md) lines from $CONTENT_URL"
+
       - name: Generate post file
         env:
           TITLE: ${{ inputs.title }}
           CATEGORIES: ${{ inputs.categories }}
-          CONTENT: ${{ inputs.content }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib, re, datetime
 
           title = os.environ["TITLE"].strip()
           categories = os.environ.get("CATEGORIES", "").strip()
-          content = os.environ["CONTENT"].strip()
+          content = pathlib.Path("post_body.md").read_text().strip()
 
           if not title:
               raise SystemExit("Title is required")
